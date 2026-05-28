@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infer — Ops Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0d1117;
+    --bg2: #161b22;
+    --bg3: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #7d8590;
+    --text-dim: #484f58;
+    --accent-blue: #58a6ff;
+    --accent-green: #3fb950;
+    --accent-orange: #f0883e;
+    --accent-yellow: #d29922;
+    --accent-red: #f85149;
+    --accent-purple: #8957e5;
+    --healthy: #238636;
+    --healthy-text: #3fb950;
+    --warning: #9e6a03;
+    --warning-text: #d29922;
+    --critical: #b62324;
+    --critical-text: #f85149;
+    --op-risk: #9e6a03;
+    --cust-a: #58a6ff;
+    --cust-b-transfer: #3fb950;
+    --cust-b-callback: #6e76a8;
+    --cust-c: #f0883e;
+    --font-main: 'IBM Plex Sans', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-main);
+    font-size: 14px;
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ── Sidebar ─────────────────────────────────── */
+  .sidebar {
+    width: 200px;
+    min-width: 200px;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 16px 0;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+  }
+  .sidebar-brand {
+    padding: 8px 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .sidebar-logo {
+    width: 28px; height: 28px;
+    background: var(--accent-blue);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px; color: #000;
+    flex-shrink: 0;
+  }
+  .sidebar-brand-text { line-height: 1.2; }
+  .sidebar-name { font-weight: 600; font-size: 14px; }
+  .sidebar-sub { font-size: 10px; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  nav { display: flex; flex-direction: column; gap: 2px; padding: 0 8px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 6px;
+    cursor: pointer; color: var(--text-muted);
+    font-size: 13px; font-weight: 400;
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+  }
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active { background: var(--bg3); color: var(--text); }
+  .nav-icon { width: 16px; height: 16px; opacity: 0.7; flex-shrink: 0; }
+  .nav-item.active .nav-icon { opacity: 1; }
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 12px 16px;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Main ────────────────────────────────────── */
+  .main {
+    margin-left: 200px;
+    flex: 1;
+    padding: 0;
+    min-width: 0;
+  }
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 28px 16px;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0;
+    background: var(--bg);
+    z-index: 50;
+  }
+  .page-title { font-size: 18px; font-weight: 600; }
+  .month-selector {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text);
+    user-select: none;
+  }
+  .month-selector svg { opacity: 0.6; }
+  .month-dropdown {
+    position: absolute; right: 28px; top: 60px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+    z-index: 200; min-width: 140px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .month-option {
+    padding: 9px 16px; cursor: pointer; font-size: 13px;
+    transition: background 0.1s;
+  }
+  .month-option:hover { background: var(--bg3); }
+  .month-option.selected { color: var(--accent-blue); }
+
+  .page-content { padding: 24px 28px; }
+
+  /* ── KPI Cards ───────────────────────────────── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .kpi-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .kpi-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .kpi-value {
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .kpi-value.green { color: var(--accent-green); }
+  .kpi-sub { font-size: 12px; color: var(--text-muted); }
+
+  /* ── Cards ───────────────────────────────────── */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+  }
+  .card-title {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 16px;
+  }
+
+  /* ── Revenue chart ───────────────────────────── */
+  .chart-wrap { position: relative; }
+  .chart-legend {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 12px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ── Customer Health ─────────────────────────── */
+  .section-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+  }
+  .health-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .health-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .health-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .health-card-name { font-size: 15px; font-weight: 600; }
+  .badge {
+    font-size: 10px; font-weight: 600;
+    padding: 3px 8px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .badge-healthy { background: var(--healthy); color: var(--healthy-text); }
+  .badge-warning { background: var(--warning); color: var(--warning-text); }
+  .badge-critical { background: var(--critical); color: var(--critical-text); }
+  .badge-op-risk { background: var(--op-risk); color: var(--warning-text); }
+  .health-metric-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .health-metric-value { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+  .health-metric-sub { font-size: 12px; color: var(--text-muted); }
+
+  /* ── Insights ────────────────────────────────── */
+  .insights-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+  }
+  .insights-title { font-size: 14px; font-weight: 500; margin-bottom: 14px; }
+  .insight-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    margin-bottom: 10px; font-size: 13px; color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .insight-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent-blue); margin-top: 5px; flex-shrink: 0;
+  }
+
+  /* ── Campaign Health page ────────────────────── */
+  .campaign-section {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .campaign-section-header { margin-bottom: 20px; }
+  .campaign-section-title { font-size: 16px; font-weight: 600; }
+  .campaign-section-subtitle { font-size: 12px; color: var(--text-muted); margin-left: 10px; }
+  .campaign-two-col {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 32px;
+  }
+  .campaign-col-header {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted); margin-bottom: 14px; font-weight: 500;
+  }
+  .metric-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 0; border-bottom: 1px solid var(--border);
+  }
+  .metric-row:last-child { border-bottom: none; }
+  .metric-row-label { font-size: 13px; color: var(--text-muted); }
+  .metric-row-value { font-size: 13px; font-weight: 500; }
+  .campaign-insight {
+    margin-top: 14px;
+    display: flex; align-items: flex-start; gap: 8px;
+    font-size: 12px; color: var(--text-muted);
+  }
+  .campaign-insight .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-blue); margin-top: 4px; flex-shrink: 0; }
+
+  .donut-row { display: flex; align-items: center; gap: 24px; margin-top: 16px; }
+  .donut-wrap { position: relative; width: 100px; height: 100px; flex-shrink: 0; }
+  .donut-legend { display: flex; flex-direction: column; gap: 8px; }
+  .donut-legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+  .donut-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .donut-legend-val { color: var(--text); font-weight: 500; margin-left: 4px; }
+
+  .sub-section-title { font-size: 12px; color: var(--text-muted); margin: 20px 0 10px; }
+
+  /* ── Unit Economics ──────────────────────────── */
+  .ue-kpi-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+    margin-bottom: 24px;
+  }
+  .profit-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+    margin-bottom: 20px;
+  }
+  .profit-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px;
+  }
+  .profit-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .profit-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+  .profit-row-label { color: var(--text-muted); }
+  .profit-divider { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+  .profit-margin-bar { height: 4px; border-radius: 2px; margin-top: 12px; }
+  .margin-pct-value { font-size: 22px; font-weight: 600; }
+  .margin-low { color: var(--accent-yellow); }
+  .margin-mid { color: var(--accent-green); }
+  .margin-high { color: var(--accent-green); }
+
+  /* ── Revenue vs Cost chart ───────────────────── */
+  .rev-cost-chart { height: 240px; }
+
+  /* ── Misc ────────────────────────────────────── */
+  .page { display: none; }
+  .page.active { display: block; }
+  .hidden { display: none !important; }
+
+  .chart-container-sm { height: 160px; }
+  .chart-container-md { height: 200px; }
+  .chart-container-bar { height: 180px; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  @media (max-width: 1100px) {
+    .kpi-grid, .ue-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .health-grid, .profit-grid { grid-template-columns: repeat(2, 1fr); }
+    .campaign-two-col { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="sidebar-logo">I</div>
+    <div class="sidebar-brand-text">
+      <div class="sidebar-name">Infer</div>
+      <div class="sidebar-sub">OPS Dashboard</div>
+    </div>
+  </div>
+  <nav>
+    <div class="nav-item active" onclick="showPage('overview', this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M1 2.5A1.5 1.5 0 012.5 1h3A1.5 1.5 0 017 2.5v3A1.5 1.5 0 015.5 7h-3A1.5 1.5 0 011 5.5v-3zm8 0A1.5 1.5 0 0110.5 1h3A1.5 1.5 0 0115 2.5v3A1.5 1.5 0 0113.5 7h-3A1.5 1.5 0 019 5.5v-3zm-8 8A1.5 1.5 0 012.5 9h3A1.5 1.5 0 017 10.5v3A1.5 1.5 0 015.5 15h-3A1.5 1.5 0 011 13.5v-3zm8 0A1.5 1.5 0 0110.5 9h3A1.5 1.5 0 0115 10.5v3A1.5 1.5 0 0113.5 15h-3A1.5 1.5 0 019 13.5v-3z"/>
+      </svg>
+      Overview
+    </div>
+    <div class="nav-item" onclick="showPage('campaign', this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M0 2a2 2 0 012-2h12a2 2 0 012 2v1a2 2 0 01-2 2H2a2 2 0 01-2-2V2zm15 3H1v9a1 1 0 001 1h12a1 1 0 001-1V5zM5 7.5a.5.5 0 01.5-.5h5a.5.5 0 010 1h-5a.5.5 0 01-.5-.5zm0 2a.5.5 0 01.5-.5h3a.5.5 0 010 1h-3a.5.5 0 01-.5-.5z"/>
+      </svg>
+      Campaign Health
+    </div>
+    <div class="nav-item" onclick="showPage('unit', this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M1 0a1 1 0 00-1 1v14a1 1 0 001 1h5v-1H2V1h12v5h1V1a1 1 0 00-1-1H1zm7 6v2h2v1H8v2H7v-2H5v-1h2V6h1zm2 7l2 2 4-4-.707-.707L12 13.586l-1.293-1.293L10 13z"/>
+      </svg>
+      Unit Economics
+    </div>
+  </nav>
+  <div class="sidebar-footer">Internal use only</div>
+</aside>
+
+<!-- Main content -->
+<main class="main">
+
+  <!-- ── OVERVIEW PAGE ── -->
+  <div id="page-overview" class="page active">
+    <div class="page-header">
+      <h1 class="page-title">Overview</h1>
+      <div style="position:relative">
+        <div class="month-selector" onclick="toggleMonthDropdown('overview')">
+          <span id="overview-month-label">Feb 2026</span>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M6 8L1 3h10z"/></svg>
+        </div>
+        <div class="month-dropdown hidden" id="overview-dropdown">
+          <div class="month-option selected" onclick="selectMonth('2026-02','overview')">Feb 2026</div>
+          <div class="month-option" onclick="selectMonth('2026-03','overview')">Mar 2026</div>
+          <div class="month-option" onclick="selectMonth('2026-04','overview')">Apr 2026</div>
+        </div>
+      </div>
+    </div>
+    <div class="page-content">
+      <!-- KPI cards -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Monthly Revenue</div>
+          <div class="kpi-value" id="ov-revenue">$16,728</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Contribution Margin</div>
+          <div class="kpi-value green" id="ov-margin">36.0%</div>
+          <div class="kpi-sub" id="ov-contribution">Contribution: $6,016</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Calls Handled</div>
+          <div class="kpi-value" id="ov-calls">24,591</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Active Risks</div>
+          <div class="kpi-value" id="ov-risks">0</div>
+          <div class="kpi-sub" id="ov-risks-sub">No flags</div>
+        </div>
+      </div>
+
+      <!-- Revenue by customer chart -->
+      <div class="card">
+        <div class="card-title">Revenue by Customer</div>
+        <div class="chart-wrap">
+          <canvas id="revenueChart" height="200"></canvas>
+        </div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--cust-a)"></div>Customer A</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--cust-b-transfer)"></div>Cust B Transfer</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--cust-b-callback)"></div>Cust B Callback</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--cust-c)"></div>Customer C</div>
+        </div>
+      </div>
+
+      <!-- Customer Health -->
+      <div class="section-label">Customer Health</div>
+      <div class="health-grid">
+        <div class="health-card">
+          <div class="health-card-header">
+            <span class="health-card-name">Customer A</span>
+            <span class="badge badge-healthy">Healthy</span>
+          </div>
+          <div class="health-metric-label">Transfer Rate</div>
+          <div class="health-metric-value" id="ov-a-xfer">39.4%</div>
+          <div class="health-metric-sub" id="ov-a-drop">Drop rate: 5.6%</div>
+        </div>
+        <div class="health-card">
+          <div class="health-card-header">
+            <span class="health-card-name">Customer B</span>
+            <span class="badge" id="ov-b-badge">WARNING</span>
+          </div>
+          <div class="health-metric-label">Transfer Rate (Inbound)</div>
+          <div class="health-metric-value" id="ov-b-xfer">42.5%</div>
+          <div class="health-metric-sub" id="ov-b-note">Callbacks (47.0%) exceeded live transfers</div>
+        </div>
+        <div class="health-card">
+          <div class="health-card-header">
+            <span class="health-card-name">Customer C</span>
+            <span class="badge badge-healthy">Healthy</span>
+          </div>
+          <div class="health-metric-label">Connect Rate</div>
+          <div class="health-metric-value" id="ov-c-connect">36.1%</div>
+          <div class="health-metric-sub" id="ov-c-note">Voicemail: 22.2% · No-answer: 41.7%</div>
+        </div>
+      </div>
+
+      <!-- Key Insights -->
+      <div class="insights-card">
+        <div class="insights-title" id="ov-insights-title">Key Insights — Feb 2026</div>
+        <div id="ov-insights-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CAMPAIGN HEALTH PAGE ── -->
+  <div id="page-campaign" class="page">
+    <div class="page-header">
+      <h1 class="page-title">Campaign Health</h1>
+      <div style="position:relative">
+        <div class="month-selector" onclick="toggleMonthDropdown('campaign')">
+          <span id="campaign-month-label">Feb 2026</span>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M6 8L1 3h10z"/></svg>
+        </div>
+        <div class="month-dropdown hidden" id="campaign-dropdown">
+          <div class="month-option selected" onclick="selectMonth('2026-02','campaign')">Feb 2026</div>
+          <div class="month-option" onclick="selectMonth('2026-03','campaign')">Mar 2026</div>
+          <div class="month-option" onclick="selectMonth('2026-04','campaign')">Apr 2026</div>
+        </div>
+      </div>
+    </div>
+    <div class="page-content">
+
+      <!-- Customer A -->
+      <div class="campaign-section">
+        <div class="campaign-section-header">
+          <span class="campaign-section-title">Customer A — Inbound Qualification</span>
+          <span class="campaign-section-subtitle">Overflow qualification for health insurance brokerage</span>
+        </div>
+        <div style="display:grid;grid-template-columns:220px 1fr;gap:32px;align-items:start">
+          <div>
+            <div class="metric-row"><span class="metric-row-label">Transfer Rate</span><span class="metric-row-value" id="ch-a-xfer">39.4% of 3,757 calls</span></div>
+            <div class="metric-row"><span class="metric-row-label">Drop Rate</span><span class="metric-row-value" id="ch-a-drop">5.6%</span></div>
+            <div class="metric-row"><span class="metric-row-label">Transfers</span><span class="metric-row-value" id="ch-a-transfers">1,480</span></div>
+            <div class="metric-row"><span class="metric-row-label">Disqualified</span><span class="metric-row-value" id="ch-a-disq">1,946</span></div>
+            <div class="metric-row"><span class="metric-row-label">Dropped</span><span class="metric-row-value" id="ch-a-dropped">209</span></div>
+            <div class="campaign-insight"><div class="dot"></div><span id="ch-a-insight">Transfer rate of 39.4% is above threshold.</span></div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Daily Transfer Rate (%)</div>
+            <div class="chart-container-sm"><canvas id="aTransferChart"></canvas></div>
+          </div>
+        </div>
+        <div style="margin-top:20px">
+          <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">Qualification Outcomes</div>
+          <div class="donut-row">
+            <div class="donut-wrap"><canvas id="aDonutChart"></canvas></div>
+            <div class="donut-legend" id="a-donut-legend"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Customer B -->
+      <div class="campaign-section">
+        <div class="campaign-section-header">
+          <span class="campaign-section-title">Customer B — Two Campaigns</span>
+          <span class="campaign-section-subtitle">Property insurance agency</span>
+        </div>
+        <div class="campaign-two-col">
+          <!-- Inbound Transfer -->
+          <div>
+            <div class="campaign-col-header">Inbound Transfer</div>
+            <div class="metric-row"><span class="metric-row-label">Transfer Rate</span><span class="metric-row-value" id="ch-b-xfer">42.5%</span></div>
+            <div class="metric-row"><span class="metric-row-label">Callback Rate</span><span class="metric-row-value" id="ch-b-cb">47.0%</span></div>
+            <div class="metric-row"><span class="metric-row-label">Drop Rate</span><span class="metric-row-value" id="ch-b-drop">8.8%</span></div>
+            <div class="metric-row"><span class="metric-row-label">Transfers</span><span class="metric-row-value" id="ch-b-transfers">2,599</span></div>
+            <div class="metric-row"><span class="metric-row-label">Callbacks</span><span class="metric-row-value" id="ch-b-callbacks">2,874</span></div>
+            <div class="metric-row"><span class="metric-row-label">Total Calls</span><span class="metric-row-value" id="ch-b-total">6,121</span></div>
+            <div class="campaign-insight"><div class="dot"></div><span id="ch-b-insight">47.0% callback rate exceeded 42.5% transfer rate.</span></div>
+          </div>
+          <!-- Missed-Call Callback -->
+          <div>
+            <div class="campaign-col-header">Missed-Call Callback</div>
+            <div class="metric-row"><span class="metric-row-label">Callback Rate</span><span class="metric-row-value" id="ch-bmcc-cb">61.7%</span></div>
+            <div class="metric-row"><span class="metric-row-label">Drop Rate</span><span class="metric-row-value" id="ch-bmcc-drop">10.8%</span></div>
+            <div class="metric-row"><span class="metric-row-label">Callbacks</span><span class="metric-row-value" id="ch-bmcc-callbacks">1,355</span></div>
+            <div class="metric-row"><span class="metric-row-label">Dropped</span><span class="metric-row-value" id="ch-bmcc-dropped">238</span></div>
+            <div class="metric-row"><span class="metric-row-label">Total Calls</span><span class="metric-row-value" id="ch-bmcc-total">2,195</span></div>
+            <div class="metric-row"><span class="metric-row-label">Minutes</span><span class="metric-row-value" id="ch-bmcc-mins">8,308</span></div>
+            <div class="campaign-insight"><div class="dot"></div><span id="ch-bmcc-insight">61.7% callback rate. Drop rate: 10.8%.</span></div>
+          </div>
+        </div>
+        <div style="margin-top:20px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Inbound Transfer — Daily Transfer Rate (%)</div>
+          <div class="chart-container-sm"><canvas id="bTransferChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Customer C -->
+      <div class="campaign-section">
+        <div class="campaign-section-header">
+          <span class="campaign-section-title">Customer C — Renewal &amp; Retention</span>
+          <span class="campaign-section-subtitle">Scheduled outbound to existing customers</span>
+        </div>
+        <div style="display:grid;grid-template-columns:220px 1fr;gap:32px;align-items:start">
+          <div>
+            <div class="metric-row"><span class="metric-row-label">Connect Rate</span><span class="metric-row-value" id="ch-c-connect">36.1%</span></div>
+            <div class="metric-row"><span class="metric-row-label">Voicemail Rate</span><span class="metric-row-value" id="ch-c-vm">22.2%</span></div>
+            <div class="metric-row"><span class="metric-row-label">No-Answer Rate</span><span class="metric-row-value" id="ch-c-na">41.7%</span></div>
+            <div class="metric-row"><span class="metric-row-label">Connected</span><span class="metric-row-value" id="ch-c-connected">12,518</span></div>
+            <div class="metric-row"><span class="metric-row-label">Attempted</span><span class="metric-row-value" id="ch-c-attempted">34,712</span></div>
+            <div class="campaign-insight"><div class="dot"></div><span id="ch-c-insight">36.1% connect rate. Voicemail 22.2% · No-answer 41.7%.</span></div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Daily Outbound Volume (Attempted)</div>
+            <div class="chart-container-bar"><canvas id="cVolumeChart"></canvas></div>
+          </div>
+        </div>
+        <div style="margin-top:20px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Daily Connect Rate (%)</div>
+          <div class="chart-container-sm"><canvas id="cConnectChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── UNIT ECONOMICS PAGE ── -->
+  <div id="page-unit" class="page">
+    <div class="page-header">
+      <h1 class="page-title">Unit Economics</h1>
+      <div style="position:relative">
+        <div class="month-selector" onclick="toggleMonthDropdown('unit')">
+          <span id="unit-month-label">Apr 2026</span>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M6 8L1 3h10z"/></svg>
+        </div>
+        <div class="month-dropdown hidden" id="unit-dropdown">
+          <div class="month-option" onclick="selectMonth('2026-02','unit')">Feb 2026</div>
+          <div class="month-option" onclick="selectMonth('2026-03','unit')">Mar 2026</div>
+          <div class="month-option selected" onclick="selectMonth('2026-04','unit')">Apr 2026</div>
+        </div>
+      </div>
+    </div>
+    <div class="page-content">
+      <div class="ue-kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Revenue</div>
+          <div class="kpi-value" id="ue-revenue">$15,414</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Variable Costs</div>
+          <div class="kpi-value" id="ue-varcost">$6,621</div>
+          <div class="kpi-sub" id="ue-varcost-sub">$0.07/min</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Fixed Costs</div>
+          <div class="kpi-value" id="ue-fixedcost">$6,700</div>
+          <div class="kpi-sub">Telephony</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Contribution Margin</div>
+          <div class="kpi-value green" id="ue-margin">13.6%</div>
+          <div class="kpi-sub" id="ue-contribution">$2,093</div>
+        </div>
+      </div>
+
+      <!-- Revenue vs Total Cost chart -->
+      <div class="card">
+        <div class="card-title">Revenue vs Total Cost</div>
+        <div class="rev-cost-chart"><canvas id="revCostChart"></canvas></div>
+        <div class="chart-legend" style="margin-top:10px">
+          <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div>Revenue</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div>Total Cost</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#3fb950;width:16px;height:3px;border-radius:1px"></div>Margin %</div>
+        </div>
+      </div>
+
+      <!-- Customer Profitability -->
+      <div class="section-label" id="ue-profitability-label">Customer Profitability — Apr 2026</div>
+      <div class="profit-grid">
+        <div class="profit-card">
+          <div class="profit-card-header"><span style="font-weight:600;font-size:15px">Customer A</span></div>
+          <div class="profit-row"><span class="profit-row-label">Revenue</span><span id="ue-a-rev">$1,808</span></div>
+          <div class="profit-row"><span class="profit-row-label">Variable Costs</span><span id="ue-a-var">$1,017</span></div>
+          <hr class="profit-divider">
+          <div class="profit-row"><span class="profit-row-label">Gross Margin</span><span id="ue-a-gm">$791</span></div>
+          <div class="profit-row"><span class="profit-row-label">Margin %</span><span></span></div>
+          <div class="margin-pct-value margin-low" id="ue-a-pct">43.7%</div>
+          <div class="profit-margin-bar" id="ue-a-bar" style="background:linear-gradient(to right,var(--accent-yellow),var(--accent-yellow));width:43.7%"></div>
+        </div>
+        <div class="profit-card">
+          <div class="profit-card-header">
+            <span style="font-weight:600;font-size:15px">Customer B</span>
+            <span class="badge badge-op-risk" id="ue-b-badge">Operational Risk</span>
+          </div>
+          <div class="profit-row"><span class="profit-row-label">Revenue</span><span id="ue-b-rev">$5,670</span></div>
+          <div class="profit-row"><span class="profit-row-label">Variable Costs</span><span id="ue-b-var">$2,132</span></div>
+          <hr class="profit-divider">
+          <div class="profit-row"><span class="profit-row-label">Gross Margin</span><span id="ue-b-gm">$3,538</span></div>
+          <div class="profit-row"><span class="profit-row-label">Margin %</span><span></span></div>
+          <div class="margin-pct-value margin-high" id="ue-b-pct">62.4%</div>
+          <div class="profit-margin-bar" id="ue-b-bar" style="background:linear-gradient(to right,var(--accent-green),var(--accent-green));width:62.4%"></div>
+          <div style="font-size:11px;color:var(--warning-text);margin-top:8px" id="ue-b-note">Revenue highly dependent on transfer conversion.</div>
+        </div>
+        <div class="profit-card">
+          <div class="profit-card-header"><span style="font-weight:600;font-size:15px">Customer C</span></div>
+          <div class="profit-row"><span class="profit-row-label">Revenue</span><span id="ue-c-rev">$7,936</span></div>
+          <div class="profit-row"><span class="profit-row-label">Variable Costs</span><span id="ue-c-var">$3,472</span></div>
+          <hr class="profit-divider">
+          <div class="profit-row"><span class="profit-row-label">Gross Margin</span><span id="ue-c-gm">$4,464</span></div>
+          <div class="profit-row"><span class="profit-row-label">Margin %</span><span></span></div>
+          <div class="margin-pct-value margin-high" id="ue-c-pct">56.3%</div>
+          <div class="profit-margin-bar" id="ue-c-bar" style="background:linear-gradient(to right,var(--accent-green),var(--accent-green));width:56.3%"></div>
+        </div>
+      </div>
+
+      <!-- Economic Insights -->
+      <div class="insights-card">
+        <div class="insights-title" id="ue-insights-title">Economic Insights — Apr 2026</div>
+        <div id="ue-insights-list"></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ─── DATA ────────────────────────────────────────────────────────────
+const DATA = {
+  overview: {
+    '2026-02': {
+      revenue: '$16,728', margin: '36.0%', contribution: 'Contribution: $6,016',
+      calls: '24,591', risks: '0', risksSub: 'No flags',
+      aXfer: '39.4%', aDrop: 'Drop rate: 5.6%',
+      bBadge: 'badge-warning', bBadgeText: 'WARNING',
+      bXfer: '42.5%', bNote: 'Callbacks (47.0%) exceeded live transfers',
+      cConnect: '36.1%', cNote: 'Voicemail: 22.2% · No-answer: 41.7%',
+      insights: [
+        'Customer B callback rate (47.0%) exceeded transfer rate (42.5%) this month.',
+        'Contribution margin: 36.0% ($6,016 net). Best month of the quarter.',
+        'Customer C connect rate stable at 36.1% across 34,712 outbound attempts.'
+      ]
+    },
+    '2026-03': {
+      revenue: '$14,551', margin: '7.7%', contribution: 'Contribution: $1,126',
+      calls: '30,963', risks: '2', risksSub: 'Review Campaign Health',
+      aXfer: '40.0%', aDrop: 'Drop rate: 6.0%',
+      bBadge: 'badge-critical', bBadgeText: 'CRITICAL',
+      bXfer: '11.0%', bNote: 'Callbacks (78.1%) exceeded live transfers',
+      cConnect: '35.9%', cNote: 'Voicemail: 21.7% · No-answer: 42.4%',
+      insights: [
+        'Customer B callback rate (78.1%) exceeded transfer rate (11.0%) this month.',
+        'Contribution margin moved down from 36.0% (Feb) to 7.7% (Mar).',
+        'Fixed cost increase to $6,800 compressed margin despite higher volume.'
+      ]
+    },
+    '2026-04': {
+      revenue: '$15,414', margin: '13.6%', contribution: 'Contribution: $2,093',
+      calls: '30,389', risks: '2', risksSub: 'Review Campaign Health',
+      aXfer: '40.9%', aDrop: 'Drop rate: 6.0%',
+      bBadge: 'badge-warning', bBadgeText: 'WARNING',
+      bXfer: '17.1%', bNote: 'Callbacks (72.1%) exceeded live transfers',
+      cConnect: '36.1%', cNote: 'Voicemail: 22.0% · No-answer: 41.9%',
+      insights: [
+        'Customer B callback rate (72.1%) exceeded transfer rate (17.1%) this month.',
+        'Contribution margin moved up from 7.7% (Mar) to 13.6% (Apr).',
+        'Customer C gross margin: 56.3%. No platform fee — margin scales with volume at $0.09/min net.'
+      ]
+    }
+  },
+  campaign: {
+    '2026-02': {
+      a: { xfer: '39.4% of 3,757 calls', drop: '5.6%', transfers: '1,480', disq: '1,946', dropped: '209',
+           insight: 'Transfer rate of 39.4% is above threshold.',
+           donut: [1480, 1946, 209], donutPct: ['40.7%','53.5%','5.7%'] },
+      bIb: { xfer: '42.5%', cb: '47.0%', drop: '8.8%', transfers: '2,599', callbacks: '2,874', total: '6,121',
+             insight: '47.0% callback rate exceeded 42.5% transfer rate.' },
+      bMcc: { cb: '61.7%', drop: '10.8%', callbacks: '1,355', dropped: '238', total: '2,195', mins: '8,308',
+              insight: '61.7% callback rate. Drop rate: 10.8%.' },
+      c: { connect: '36.1%', vm: '22.2%', na: '41.7%', connected: '12,518', attempted: '34,712',
+           insight: '36.1% connect rate. Voicemail 22.2% · No-answer 41.7%.' }
+    },
+    '2026-03': {
+      a: { xfer: '40.0% of 4,075 calls', drop: '6.0%', transfers: '1,631', disq: '2,042', dropped: '246',
+           insight: 'Transfer rate of 40.0% is above threshold.',
+           donut: [1631, 2042, 246], donutPct: ['41.6%','52.1%','6.3%'] },
+      bIb: { xfer: '11.0%', cb: '78.1%', drop: '9.0%', transfers: '773', callbacks: '5,476', total: '7,010',
+             insight: '78.1% callback rate exceeded 11.0% transfer rate.' },
+      bMcc: { cb: '61.2%', drop: '11.3%', callbacks: '1,516', dropped: '279', total: '2,476', mins: '9,313',
+              insight: '61.2% callback rate. Drop rate: 11.3%.' },
+      c: { connect: '35.9%', vm: '21.7%', na: '42.4%', connected: '17,402', attempted: '48,449',
+           insight: '35.9% connect rate. Voicemail 21.7% · No-answer 42.4%.' }
+    },
+    '2026-04': {
+      a: { xfer: '40.9% of 3,894 calls', drop: '6.0%', transfers: '1,592', disq: '2,080', dropped: '232',
+           insight: 'Transfer rate of 40.9% is above threshold.',
+           donut: [1592, 2080, 232], donutPct: ['40.8%','53.3%','5.9%'] },
+      bIb: { xfer: '17.1%', cb: '72.1%', drop: '8.9%', transfers: '1,187', callbacks: '4,999', total: '6,929',
+             insight: '72.1% callback rate exceeded 17.1% transfer rate.' },
+      bMcc: { cb: '60.1%', drop: '11.5%', callbacks: '1,491', dropped: '285', total: '2,481', mins: '9,393',
+              insight: '60.1% callback rate. Drop rate: 11.5%.' },
+      c: { connect: '36.1%', vm: '22.0%', na: '41.9%', connected: '17,085', attempted: '47,262',
+           insight: '36.1% connect rate. Voicemail 22.0% · No-answer 41.9%.' }
+    }
+  },
+  unit: {
+    '2026-02': {
+      revenue: '$16,728', varCost: '$5,412', varSub: '$0.07/min', fixedCost: '$5,300', margin: '36.0%', contribution: '$6,016',
+      a: { rev: '$1,719', var: '$948', gm: '$771', pct: '44.9', note: null },
+      b: { rev: '$9,027', var: '$1,265', gm: '$7,762', pct: '86.0', note: 'Revenue highly dependent on transfer conversion.', badge: true },
+      c: { rev: '$5,982', var: '$2,617', gm: '$3,365', pct: '56.3', note: null },
+      insights: [
+        'Contribution margin: 36.0% ($6,016 net). Variable costs 32% of revenue · Fixed costs 32% of revenue.',
+        'Customer B transfer rate at 42.5% this month. Revenue is transfer-dependent.',
+        'Customer C gross margin: 56.3%. No platform fee — margin scales with volume at $0.09/min net.'
+      ]
+    },
+    '2026-03': {
+      revenue: '$14,551', varCost: '$6,625', varSub: '$0.07/min', fixedCost: '$6,800', margin: '7.7%', contribution: '$1,126',
+      a: { rev: '$1,802', var: '$1,013', gm: '$789', pct: '43.8', note: null },
+      b: { rev: '$4,623', var: '$2,054', gm: '$2,569', pct: '55.6', note: 'Revenue highly dependent on transfer conversion.', badge: true },
+      c: { rev: '$8,126', var: '$3,555', gm: '$4,571', pct: '56.3', note: null },
+      insights: [
+        'Contribution margin: 7.7% ($1,126 net). Variable costs 46% of revenue · Fixed costs 47% of revenue.',
+        'Customer B transfer rate at 11.0% this month. Revenue is transfer-dependent — 78.1% callback share generates no per-transfer billing.',
+        'Fixed cost spike to $6,800 in March compressed overall margin significantly.'
+      ]
+    },
+    '2026-04': {
+      revenue: '$15,414', varCost: '$6,621', varSub: '$0.07/min', fixedCost: '$6,700', margin: '13.6%', contribution: '$2,093',
+      a: { rev: '$1,808', var: '$1,017', gm: '$791', pct: '43.7', note: null },
+      b: { rev: '$5,670', var: '$2,132', gm: '$3,538', pct: '62.4', note: 'Revenue highly dependent on transfer conversion.', badge: true },
+      c: { rev: '$7,936', var: '$3,472', gm: '$4,464', pct: '56.3', note: null },
+      insights: [
+        'Contribution margin: 13.6% ($2,093 net). Variable costs 43% of revenue · Fixed costs 43% of revenue.',
+        'Customer B transfer rate at 17.1% this month. Revenue is transfer-dependent — 72.1% callback share generates no per-transfer billing.',
+        'Customer C gross margin: 56.3%. No platform fee — margin scales with volume at $0.09/min net.'
+      ]
+    }
+  },
+  // Revenue by customer for bar chart (usage only, platform fees separate)
+  revenueBreakdown: {
+    '2026-02': { a: 1219, bTransfer: 6498, bCallback: 1329, c: 5982 },
+    '2026-03': { a: 1302, bTransfer: 1933, bCallback: 1490, c: 8126 },
+    '2026-04': { a: 1308, bTransfer: 2968, bCallback: 1503, c: 7936 }
+  },
+  // Daily chart data
+  daily: {
+    aTransfer: {
+      '2026-02': [["02-01",34.8],["02-02",36.6],["02-03",37.6],["02-04",35.7],["02-05",38.4],["02-06",41.5],["02-07",40.3],["02-08",37.3],["02-09",38.8],["02-10",40.6],["02-11",41.0],["02-12",36.2],["02-13",38.5],["02-14",37.3],["02-15",37.1],["02-16",40.0],["02-17",40.2],["02-18",39.8],["02-19",43.0],["02-20",42.9],["02-21",39.5],["02-22",42.9],["02-23",43.1],["02-24",36.5],["02-25",37.6],["02-26",40.8],["02-27",40.5],["02-28",41.8]],
+      '2026-03': [["03-01",35.6],["03-02",37.4],["03-03",41.1],["03-04",37.6],["03-05",43.3],["03-06",42.5],["03-07",36.6],["03-08",41.7],["03-09",41.4],["03-10",41.6],["03-11",43.2],["03-12",36.9],["03-13",40.4],["03-14",38.8],["03-15",38.6],["03-16",43.3],["03-17",41.3],["03-18",38.4],["03-19",40.3],["03-20",37.6],["03-21",37.1],["03-22",40.3],["03-23",40.0],["03-24",42.8],["03-25",36.7],["03-26",43.2],["03-27",41.8],["03-28",37.7],["03-29",42.4],["03-30",36.9],["03-31",38.8]],
+      '2026-04': [["04-01",37.1],["04-02",38.1],["04-03",41.3],["04-04",40.8],["04-05",42.6],["04-06",37.8],["04-07",40.6],["04-08",40.1],["04-09",43.0],["04-10",38.2],["04-11",34.8],["04-12",40.3],["04-13",35.8],["04-14",43.5],["04-15",42.4],["04-16",40.6],["04-17",41.7],["04-18",39.5],["04-19",38.3],["04-20",35.9],["04-21",null],["04-22",35.5],["04-23",41.7],["04-24",35.7],["04-25",36.6],["04-26",41.1],["04-27",38.5],["04-28",36.0],["04-29",41.8],["04-30",36.9]]
+    },
+    bTransfer: {
+      '2026-02': [["02-01",44.2],["02-02",44.9],["02-03",43.6],["02-04",43.8],["02-05",42.8],["02-06",41.2],["02-07",45.0],["02-08",44.0],["02-09",45.1],["02-10",39.4],["02-11",39.1],["02-12",45.2],["02-13",45.6],["02-14",37.3],["02-15",42.9],["02-16",43.2],["02-17",41.2],["02-18",39.2],["02-19",44.5],["02-20",46.5],["02-21",38.4],["02-22",46.1],["02-23",41.6],["02-24",38.7],["02-25",40.7],["02-26",42.5],["02-27",42.9],["02-28",40.8]],
+      '2026-03': [["03-01",10.8],["03-02",11.2],["03-03",10.5],["03-04",11.3],["03-05",11.1],["03-06",11.0],["03-07",9.9],["03-08",11.2],["03-09",9.7],["03-10",9.9],["03-11",12.0],["03-12",10.8],["03-13",11.3],["03-14",11.2],["03-15",11.8],["03-16",10.5],["03-17",11.3],["03-18",11.5],["03-19",12.1],["03-20",11.0],["03-21",9.8],["03-22",11.2],["03-23",11.8],["03-24",11.8],["03-25",11.8],["03-26",10.3],["03-27",10.0],["03-28",10.7],["03-29",10.1],["03-30",11.7],["03-31",11.0]],
+      '2026-04': [["04-01",18.4],["04-02",16.5],["04-03",16.3],["04-04",18.3],["04-05",18.4],["04-06",18.9],["04-07",18.3],["04-08",17.9],["04-09",16.9],["04-10",17.3],["04-11",15.8],["04-12",16.9],["04-13",17.5],["04-14",16.4],["04-15",19.0],["04-16",17.3],["04-17",16.7],["04-18",16.1],["04-19",16.8],["04-20",16.1],["04-21",16.0],["04-22",18.8],["04-23",18.1],["04-24",15.1],["04-25",17.4],["04-26",17.3],["04-27",17.4],["04-28",15.6],["04-29",15.5],["04-30",16.3]]
+    },
+    cVolume: {
+      '2026-02': [["02-01",0],["02-02",1871],["02-03",1679],["02-04",1735],["02-05",1732],["02-06",1756],["02-07",473],["02-08",0],["02-09",1748],["02-10",1793],["02-11",1668],["02-12",1905],["02-13",1571],["02-14",447],["02-15",0],["02-16",339],["02-17",1644],["02-18",1649],["02-19",1746],["02-20",1576],["02-21",494],["02-22",0],["02-23",1551],["02-24",1576],["02-25",1885],["02-26",1684],["02-27",1721],["02-28",469]],
+      '2026-03': [["03-01",0],["03-02",1901],["03-03",1947],["03-04",1964],["03-05",1899],["03-06",1984],["03-07",494],["03-08",0],["03-09",1793],["03-10",1785],["03-11",2019],["03-12",2103],["03-13",1897],["03-14",523],["03-15",0],["03-16",1799],["03-17",2034],["03-18",6080],["03-19",1948],["03-20",2009],["03-21",506],["03-22",0],["03-23",2029],["03-24",1958],["03-25",2104],["03-26",1859],["03-27",1734],["03-28",490],["03-29",0],["03-30",1774],["03-31",1816]],
+      '2026-04': [["04-01",2136],["04-02",1946],["04-03",2039],["04-04",589],["04-05",0],["04-06",2074],["04-07",1902],["04-08",2086],["04-09",2238],["04-10",2264],["04-11",519],["04-12",0],["04-13",2029],["04-14",2176],["04-15",1846],["04-16",1932],["04-17",1809],["04-18",560],["04-19",0],["04-20",2171],["04-21",2130],["04-22",2023],["04-23",2052],["04-24",1905],["04-25",575],["04-26",0],["04-27",1835],["04-28",2005],["04-29",2292],["04-30",2129]]
+    },
+    cConnect: {
+      '2026-02': [["02-01",null],["02-02",35.2],["02-03",33.7],["02-04",36.9],["02-05",34.9],["02-06",38.4],["02-07",37.2],["02-08",null],["02-09",38.1],["02-10",37.6],["02-11",36.5],["02-12",35.2],["02-13",36.7],["02-14",36.5],["02-15",null],["02-16",37.2],["02-17",34.0],["02-18",34.7],["02-19",34.1],["02-20",36.9],["02-21",37.9],["02-22",null],["02-23",36.2],["02-24",35.0],["02-25",33.8],["02-26",37.9],["02-27",38.1],["02-28",36.9]],
+      '2026-03': [["03-01",null],["03-02",34.3],["03-03",37.7],["03-04",36.4],["03-05",36.6],["03-06",34.9],["03-07",36.4],["03-08",null],["03-09",34.7],["03-10",37.8],["03-11",36.0],["03-12",36.0],["03-13",37.9],["03-14",37.9],["03-15",null],["03-16",38.4],["03-17",35.2],["03-18",33.7],["03-19",36.0],["03-20",34.9],["03-21",37.5],["03-22",null],["03-23",37.4],["03-24",36.6],["03-25",34.0],["03-26",37.4],["03-27",34.5],["03-28",38.0],["03-29",null],["03-30",38.3],["03-31",35.2]],
+      '2026-04': [["04-01",35.4],["04-02",34.9],["04-03",34.5],["04-04",36.3],["04-05",null],["04-06",38.1],["04-07",38.3],["04-08",36.1],["04-09",34.4],["04-10",38.3],["04-11",38.3],["04-12",null],["04-13",34.7],["04-14",34.3],["04-15",36.8],["04-16",34.6],["04-17",36.8],["04-18",35.9],["04-19",null],["04-20",36.5],["04-21",34.6],["04-22",37.0],["04-23",36.4],["04-24",36.4],["04-25",35.7],["04-26",null],["04-27",38.5],["04-28",37.3],["04-29",35.4],["04-30",36.2]]
+    }
+  }
+};
+
+// ─── STATE ────────────────────────────────────────────────────────────
+let currentMonth = { overview: '2026-02', campaign: '2026-02', unit: '2026-04' };
+let charts = {};
+
+// ─── CHART DEFAULTS ───────────────────────────────────────────────────
+Chart.defaults.color = '#7d8590';
+Chart.defaults.font.family = "'IBM Plex Sans', sans-serif";
+Chart.defaults.font.size = 11;
+
+function lineChartDefaults(color) {
+  return {
+    borderColor: color,
+    backgroundColor: color + '18',
+    borderWidth: 2,
+    pointRadius: 0,
+    pointHoverRadius: 4,
+    tension: 0.4,
+    fill: true,
+    spanGaps: true
+  };
+}
+
+// ─── REVENUE BAR CHART ────────────────────────────────────────────────
+function buildRevenueChart() {
+  const ctx = document.getElementById('revenueChart').getContext('2d');
+  charts.revenue = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Feb', 'Mar', 'Apr'],
+      datasets: [
+        { label: 'Customer A', data: [1219,1302,1308], backgroundColor: 'var(--cust-a)', borderRadius: 3 },
+        { label: 'Cust B Transfer', data: [6498,1933,2968], backgroundColor: 'var(--cust-b-transfer)', borderRadius: 3 },
+        { label: 'Cust B Callback', data: [1329,1490,1503], backgroundColor: 'var(--cust-b-callback)', borderRadius: 3 },
+        { label: 'Customer C', data: [5982,8126,7936], backgroundColor: 'var(--cust-c)', borderRadius: 3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: ctx => ` ${ctx.dataset.label}: $${ctx.raw.toLocaleString()}` }
+      }},
+      scales: {
+        x: { stacked: true, grid: { display: false }, border: { display: false } },
+        y: { stacked: true, grid: { color: '#30363d40' }, border: { display: false },
+          ticks: { callback: v => '$' + (v>=1000?(v/1000)+'k':v) } }
+      }
+    }
+  });
+}
+
+// ─── REVENUE VS COST CHART ────────────────────────────────────────────
+function buildRevCostChart() {
+  const unitData = {
+    '2026-02': { rev: 16728, cost: 10712, margin: 36.0 },
+    '2026-03': { rev: 14551, cost: 13425, margin: 7.7 },
+    '2026-04': { rev: 15414, cost: 13321, margin: 13.6 }
+  };
+  const ctx = document.getElementById('revCostChart').getContext('2d');
+  charts.revCost = new Chart(ctx, {
+    data: {
+      labels: ['Feb', 'Mar', 'Apr'],
+      datasets: [
+        { type: 'bar', label: 'Revenue', data: [16728,14551,15414], backgroundColor: '#58a6ff', borderRadius: 3, yAxisID: 'y' },
+        { type: 'bar', label: 'Total Cost', data: [10712,13425,13321], backgroundColor: '#f85149', borderRadius: 3, yAxisID: 'y' },
+        { type: 'line', label: 'Margin %', data: [36.0,7.7,13.6], borderColor: '#3fb950', backgroundColor: 'transparent',
+          borderWidth: 2.5, pointRadius: 5, pointBackgroundColor: '#3fb950', tension: 0.3, yAxisID: 'y2' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: ctx => ctx.dataset.label === 'Margin %' ? ` Margin: ${ctx.raw}%` : ` ${ctx.dataset.label}: $${ctx.raw.toLocaleString()}` }
+      }},
+      scales: {
+        x: { grid: { display: false }, border: { display: false } },
+        y: { grid: { color: '#30363d40' }, border: { display: false },
+          ticks: { callback: v => '$'+(v>=1000?(v/1000)+'k':v) } },
+        y2: { position: 'right', grid: { display: false }, border: { display: false },
+          ticks: { callback: v => v+'%' }, min: 0, max: 60 }
+      }
+    }
+  });
+}
+
+// ─── LINE CHART HELPER ─────────────────────────────────────────────────
+function makeLineChart(id, data, color, label, yLabel, yMax) {
+  if (charts[id]) { charts[id].destroy(); }
+  const ctx = document.getElementById(id).getContext('2d');
+  const labels = data.map(d => d[0]);
+  const values = data.map(d => d[1]);
+  charts[id] = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [{ label, data: values, ...lineChartDefaults(color) }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: ctx => ` ${ctx.raw !== null ? ctx.raw.toFixed(1) + '%' : 'N/A'}` }
+      }},
+      scales: {
+        x: { grid: { display: false }, border: { display: false },
+          ticks: { maxTicksLimit: 7, maxRotation: 0 } },
+        y: { grid: { color: '#30363d40' }, border: { display: false },
+          min: 0, max: yMax,
+          ticks: { callback: v => v + '%', maxTicksLimit: 5 } }
+      }
+    }
+  });
+}
+
+// ─── BAR CHART HELPER ─────────────────────────────────────────────────
+function makeBarChart(id, data, color) {
+  if (charts[id]) { charts[id].destroy(); }
+  const ctx = document.getElementById(id).getContext('2d');
+  const labels = data.map(d => d[0]);
+  const values = data.map(d => d[1]);
+  charts[id] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ data: values, backgroundColor: color + 'cc', borderRadius: 2 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: ctx => ` ${ctx.raw.toLocaleString()} calls` }
+      }},
+      scales: {
+        x: { grid: { display: false }, border: { display: false },
+          ticks: { maxTicksLimit: 8, maxRotation: 0 } },
+        y: { grid: { color: '#30363d40' }, border: { display: false },
+          ticks: { callback: v => v>=1000?(v/1000)+'k':v, maxTicksLimit: 5 } }
+      }
+    }
+  });
+}
+
+// ─── DONUT CHART ──────────────────────────────────────────────────────
+function makeDonutChart(id, values, pcts, legendId) {
+  if (charts[id]) { charts[id].destroy(); }
+  const ctx = document.getElementById(id).getContext('2d');
+  charts[id] = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      datasets: [{
+        data: values,
+        backgroundColor: ['#58a6ff','#484f58','#f85149'],
+        borderWidth: 0,
+        hoverOffset: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      cutout: '68%',
+      plugins: { legend: { display: false }, tooltip: { enabled: false } }
+    }
+  });
+  const labels = ['Transferred','Disqualified','Dropped'];
+  const colors = ['#58a6ff','#484f58','#f85149'];
+  document.getElementById(legendId).innerHTML = labels.map((l,i) => `
+    <div class="donut-legend-item">
+      <div class="donut-legend-dot" style="background:${colors[i]}"></div>
+      ${l}
+      <span class="donut-legend-val">${values[i].toLocaleString()} (${pcts[i]})</span>
+    </div>`).join('');
+}
+
+// ─── UPDATE OVERVIEW ─────────────────────────────────────────────────
+function updateOverview(month) {
+  const d = DATA.overview[month];
+  document.getElementById('ov-revenue').textContent = d.revenue;
+  document.getElementById('ov-margin').textContent = d.margin;
+  document.getElementById('ov-contribution').textContent = d.contribution;
+  document.getElementById('ov-calls').textContent = d.calls;
+  document.getElementById('ov-risks').textContent = d.risks;
+  document.getElementById('ov-risks-sub').textContent = d.risksSub;
+  document.getElementById('ov-a-xfer').textContent = d.aXfer;
+  document.getElementById('ov-a-drop').textContent = d.aDrop;
+  const bBadge = document.getElementById('ov-b-badge');
+  bBadge.className = 'badge ' + d.bBadge;
+  bBadge.textContent = d.bBadgeText;
+  document.getElementById('ov-b-xfer').textContent = d.bXfer;
+  document.getElementById('ov-b-note').textContent = d.bNote;
+  document.getElementById('ov-c-connect').textContent = d.cConnect;
+  document.getElementById('ov-c-note').textContent = d.cNote;
+  const label = { '2026-02': 'Feb 2026', '2026-03': 'Mar 2026', '2026-04': 'Apr 2026' }[month];
+  document.getElementById('ov-insights-title').textContent = `Key Insights — ${label}`;
+  document.getElementById('ov-insights-list').innerHTML = d.insights.map(i =>
+    `<div class="insight-item"><div class="insight-dot"></div><span>${i}</span></div>`).join('');
+  // margin color
+  const mv = parseFloat(d.margin);
+  document.getElementById('ov-margin').style.color = mv < 15 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+}
+
+// ─── UPDATE CAMPAIGN HEALTH ───────────────────────────────────────────
+function updateCampaign(month) {
+  const d = DATA.campaign[month];
+  // Customer A
+  document.getElementById('ch-a-xfer').textContent = d.a.xfer;
+  document.getElementById('ch-a-drop').textContent = d.a.drop;
+  document.getElementById('ch-a-transfers').textContent = d.a.transfers;
+  document.getElementById('ch-a-disq').textContent = d.a.disq;
+  document.getElementById('ch-a-dropped').textContent = d.a.dropped;
+  document.getElementById('ch-a-insight').textContent = d.a.insight;
+  makeDonutChart('aDonutChart', d.a.donut, d.a.donutPct, 'a-donut-legend');
+  makeLineChart('aTransferChart', DATA.daily.aTransfer[month], '#58a6ff', 'Transfer Rate', '%', 60);
+  // Customer B IB
+  document.getElementById('ch-b-xfer').textContent = d.bIb.xfer;
+  document.getElementById('ch-b-cb').textContent = d.bIb.cb;
+  document.getElementById('ch-b-drop').textContent = d.bIb.drop;
+  document.getElementById('ch-b-transfers').textContent = d.bIb.transfers;
+  document.getElementById('ch-b-callbacks').textContent = d.bIb.callbacks;
+  document.getElementById('ch-b-total').textContent = d.bIb.total;
+  document.getElementById('ch-b-insight').textContent = d.bIb.insight;
+  // Customer B MCC
+  document.getElementById('ch-bmcc-cb').textContent = d.bMcc.cb;
+  document.getElementById('ch-bmcc-drop').textContent = d.bMcc.drop;
+  document.getElementById('ch-bmcc-callbacks').textContent = d.bMcc.callbacks;
+  document.getElementById('ch-bmcc-dropped').textContent = d.bMcc.dropped;
+  document.getElementById('ch-bmcc-total').textContent = d.bMcc.total;
+  document.getElementById('ch-bmcc-mins').textContent = d.bMcc.mins;
+  document.getElementById('ch-bmcc-insight').textContent = d.bMcc.insight;
+  // Cust B line chart — scale based on month
+  const bMax = month === '2026-02' ? 60 : (month === '2026-03' ? 16 : 24);
+  makeLineChart('bTransferChart', DATA.daily.bTransfer[month], '#3fb950', 'Transfer Rate', '%', bMax);
+  // Customer C
+  document.getElementById('ch-c-connect').textContent = d.c.connect;
+  document.getElementById('ch-c-vm').textContent = d.c.vm;
+  document.getElementById('ch-c-na').textContent = d.c.na;
+  document.getElementById('ch-c-connected').textContent = d.c.connected;
+  document.getElementById('ch-c-attempted').textContent = d.c.attempted;
+  document.getElementById('ch-c-insight').textContent = d.c.insight;
+  makeBarChart('cVolumeChart', DATA.daily.cVolume[month], '#f0883e');
+  makeLineChart('cConnectChart', DATA.daily.cConnect[month], '#f0883e', 'Connect Rate', '%', 60);
+}
+
+// ─── UPDATE UNIT ECONOMICS ────────────────────────────────────────────
+function updateUnit(month) {
+  const d = DATA.unit[month];
+  document.getElementById('ue-revenue').textContent = d.revenue;
+  document.getElementById('ue-varcost').textContent = d.varCost;
+  document.getElementById('ue-varcost-sub').textContent = d.varSub;
+  document.getElementById('ue-fixedcost').textContent = d.fixedCost;
+  document.getElementById('ue-margin').textContent = d.margin;
+  document.getElementById('ue-contribution').textContent = d.contribution;
+  const mv = parseFloat(d.margin);
+  document.getElementById('ue-margin').style.color = mv < 15 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+  const label = { '2026-02': 'Feb 2026', '2026-03': 'Mar 2026', '2026-04': 'Apr 2026' }[month];
+  document.getElementById('ue-profitability-label').textContent = `Customer Profitability — ${label}`;
+  document.getElementById('ue-insights-title').textContent = `Economic Insights — ${label}`;
+  // Customer A
+  document.getElementById('ue-a-rev').textContent = d.a.rev;
+  document.getElementById('ue-a-var').textContent = d.a.var;
+  document.getElementById('ue-a-gm').textContent = d.a.gm;
+  const aPct = parseFloat(d.a.pct);
+  document.getElementById('ue-a-pct').textContent = aPct.toFixed(1) + '%';
+  document.getElementById('ue-a-pct').className = 'margin-pct-value ' + (aPct < 50 ? 'margin-low' : 'margin-high');
+  document.getElementById('ue-a-bar').style.width = Math.min(aPct, 100) + '%';
+  // Customer B
+  document.getElementById('ue-b-rev').textContent = d.b.rev;
+  document.getElementById('ue-b-var').textContent = d.b.var;
+  document.getElementById('ue-b-gm').textContent = d.b.gm;
+  const bPct = parseFloat(d.b.pct);
+  document.getElementById('ue-b-pct').textContent = bPct.toFixed(1) + '%';
+  document.getElementById('ue-b-pct').className = 'margin-pct-value margin-high';
+  document.getElementById('ue-b-bar').style.width = Math.min(bPct, 100) + '%';
+  document.getElementById('ue-b-note').textContent = d.b.note || '';
+  // Customer C
+  document.getElementById('ue-c-rev').textContent = d.c.rev;
+  document.getElementById('ue-c-var').textContent = d.c.var;
+  document.getElementById('ue-c-gm').textContent = d.c.gm;
+  const cPct = parseFloat(d.c.pct);
+  document.getElementById('ue-c-pct').textContent = cPct.toFixed(1) + '%';
+  document.getElementById('ue-c-pct').className = 'margin-pct-value margin-high';
+  document.getElementById('ue-c-bar').style.width = Math.min(cPct, 100) + '%';
+  // Insights
+  document.getElementById('ue-insights-list').innerHTML = d.insights.map(i =>
+    `<div class="insight-item"><div class="insight-dot"></div><span>${i}</span></div>`).join('');
+}
+
+// ─── NAVIGATION ───────────────────────────────────────────────────────
+function showPage(page, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  el.classList.add('active');
+  // Init charts on first visit
+  if (page === 'campaign' && !charts.aTransferChart) {
+    updateCampaign(currentMonth.campaign);
+  }
+  if (page === 'unit' && !charts.revCost) {
+    buildRevCostChart();
+    updateUnit(currentMonth.unit);
+  }
+}
+
+// ─── MONTH SELECTOR ───────────────────────────────────────────────────
+function toggleMonthDropdown(page) {
+  const dd = document.getElementById(page + '-dropdown');
+  dd.classList.toggle('hidden');
+  // close others
+  ['overview','campaign','unit'].forEach(p => {
+    if (p !== page) document.getElementById(p + '-dropdown').classList.add('hidden');
+  });
+}
+
+function selectMonth(month, page) {
+  currentMonth[page] = month;
+  const labels = { '2026-02': 'Feb 2026', '2026-03': 'Mar 2026', '2026-04': 'Apr 2026' };
+  document.getElementById(page + '-month-label').textContent = labels[month];
+  // update selected styling
+  const dd = document.getElementById(page + '-dropdown');
+  dd.querySelectorAll('.month-option').forEach(o => o.classList.remove('selected'));
+  event.target.classList.add('selected');
+  dd.classList.add('hidden');
+  if (page === 'overview') updateOverview(month);
+  if (page === 'campaign') updateCampaign(month);
+  if (page === 'unit') updateUnit(month);
+}
+
+// close dropdowns on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.month-selector') && !e.target.closest('.month-dropdown')) {
+    document.querySelectorAll('.month-dropdown').forEach(d => d.classList.add('hidden'));
+  }
+});
+
+// ─── INIT ─────────────────────────────────────────────────────────────
+buildRevenueChart();
+updateOverview('2026-02');
+</script>
+</body>
+</html>
