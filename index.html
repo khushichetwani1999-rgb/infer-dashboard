@@ -187,7 +187,7 @@
   }
 
   /* ── Revenue chart ───────────────────────────── */
-  .chart-wrap { position: relative; }
+  .chart-wrap { position: relative; height: 160px; }
   .chart-legend {
     display: flex; gap: 16px; flex-wrap: wrap;
     justify-content: center;
@@ -461,7 +461,7 @@
       <div class="card">
         <div class="card-title">Revenue by Customer</div>
         <div class="chart-wrap">
-          <canvas id="revenueChart" height="200"></canvas>
+          <canvas id="revenueChart"></canvas>
         </div>
         <div class="chart-legend">
           <div class="legend-item"><div class="legend-dot" style="background:var(--cust-a)"></div>Customer A</div>
@@ -938,13 +938,13 @@ function buildRevenueChart() {
       ]
     },
     options: {
-      responsive: true, maintainAspectRatio: true,
+      responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: {
         callbacks: { label: ctx => ` ${ctx.dataset.label}: $${ctx.raw.toLocaleString()}` }
       }},
       scales: {
-        x: { stacked: true, grid: { display: false }, border: { display: false } },
-        y: { stacked: true, grid: { color: '#30363d40' }, border: { display: false },
+        x: { stacked: false, grid: { display: false }, border: { display: false } },
+        y: { stacked: false, grid: { color: '#30363d40' }, border: { display: false },
           ticks: { callback: v => '$' + (v>=1000?(v/1000)+'k':v) } }
       }
     }
